@@ -1,0 +1,15 @@
+{
+  "source": "GeoNames",
+  "license": "CC BY 4.0",
+  "updated": "2026-08-20",
+  "countries": [
+    {"code":"CA","name":"Canada","regions": ["Alberta","British Columbia","Manitoba","New Brunswick","Newfoundland and Labrador","Nova Scotia","Ontario","Prince Edward Island","Quebec","Saskatchewan"]},
+    {"code":"US","name":"United States","regions": ["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"]},
+    {"code":"GB","name":"United Kingdom","regions": ["England","Scotland","Wales","Northern Ireland"]},
+    {"code":"DE","name":"Germany","regions": ["Bavaria","Berlin","Brandenburg","Hesse","North Rhine-Westphalia","Saxony"]},
+    {"code":"FR","name":"France","regions": ["Auvergne-Rhone-Alpes","Brittany","Ile-de-France","Normandy","Occitanie","Provence-Alpes-Cote d'Azur"]},
+    {"code":"NL","name":"Netherlands","regions": ["Drenthe","Flevoland","Friesland","Gelderland","Groningen","Limburg","North Brabant","North Holland","Overijssel","South Holland","Utrecht","Zeeland"]},
+    {"code":"JP","name":"Japan","regions": ["Aichi","Chiba","Fukuoka","Hiroshima","Hokkaido","Hyogo","Kanagawa","Kyoto","Osaka","Saitama","Tokyo"]},
+    {"code":"AU","name":"Australia","regions": ["Australian Capital Territory","New South Wales","Northern Territory","Queensland","South Australia","Tasmania","Victoria","Western Australia"]}
+  ]
+}

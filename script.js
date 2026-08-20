@@ -44,40 +44,28 @@ async function loadStats() {
 
 async function loadCountries() {
   try {
-    const data = await getJson(`${API}/search?limit=100`);
-    const countries = [...new Map((data.results || []).map(e => [e.country_code, e.country_name])).entries()]
-      .filter(([code]) => code)
-      .sort((a,b) => a[1].localeCompare(b[1]));
+    const data = await getJson(`${API}/countries`);
+    const countries = (data.results || []).filter(e => e.country_code).map(e => [e.country_code, e.country_name, e.entries]);
     const current = countryFilter.value;
     countryFilter.innerHTML = '<option value="">All countries</option>' + countries.map(([code,name]) => `<option value="${esc(code)}">${esc(name)}</option>`).join("");
     countryFilter.value = current;
-    renderCountryGrid(data.results || []);
+    countryGrid.innerHTML = countries.map(([code,name,count]) => `
+      <button class="country-card" data-country="${esc(code)}">
+        <div class="country-name"><span>${flagFor(code)}</span>${esc(name)}</div>
+        <div class="country-count">${Number(count).toLocaleString()} ${Number(count) === 1 ? "entry" : "entries"}</div>
+      </button>`).join("");
+    countryGrid.querySelectorAll("[data-country]").forEach(button => {
+      button.addEventListener("click", () => {
+        countryFilter.value = button.dataset.country;
+        searchInput.value = "";
+        loadResults();
+        document.getElementById("directory").scrollIntoView({ behavior: "smooth" });
+      });
+    });
   } catch (_) {
     countryFilter.innerHTML = '<option value="">All countries</option>';
     countryGrid.innerHTML = "";
   }
-}
-
-function renderCountryGrid(items) {
-  const grouped = {};
-  items.forEach(e => {
-    if (!e.country_code) return;
-    if (!grouped[e.country_code]) grouped[e.country_code] = { name: e.country_name || e.country_code, count: 0 };
-    grouped[e.country_code].count++;
-  });
-  countryGrid.innerHTML = Object.entries(grouped).sort((a,b) => b[1].count - a[1].count).map(([code,data]) => `
-    <button class="country-card" data-country="${esc(code)}">
-      <div class="country-name"><span>${flagFor(code)}</span>${esc(data.name)}</div>
-      <div class="country-count">${data.count} ${data.count === 1 ? "entry" : "entries"} in current results</div>
-    </button>`).join("");
-  countryGrid.querySelectorAll("[data-country]").forEach(button => {
-    button.addEventListener("click", () => {
-      countryFilter.value = button.dataset.country;
-      searchInput.value = "";
-      loadResults();
-      document.getElementById("directory").scrollIntoView({ behavior: "smooth" });
-    });
-  });
 }
 
 function renderResults(items) {
@@ -198,9 +186,8 @@ document.getElementById("submit-form").addEventListener("submit", async e => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ip })
     });
-    const e = data.entry;
-    setMessage(`Added ${e.ip} — ${e.city_name}, ${e.region_name}, ${e.country_name}. Ping average: ${data.ping.avgMs ?? "—"} ms.`);
-    e.target = "";
+    const item = data.entry;
+    setMessage(`Added ${item.ip} — ${item.city_name}, ${item.region_name}, ${item.country_name}. Ping average: ${data.ping.avgMs ?? "—"} ms.`);
     await Promise.all([loadStats(), loadResults(), loadCountries()]);
     submitButton.textContent = "Added!";
   } catch (error) {

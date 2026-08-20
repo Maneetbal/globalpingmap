@@ -1,0 +1,6 @@
+src/
+data/
+migrations/
+wrangler.jsonc
+.assetsignore
+README.md

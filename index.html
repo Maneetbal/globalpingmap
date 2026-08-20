@@ -3,10 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Ping Map</title>
+    <meta name="description" content="PingMap — a community-maintained public IP address directory organized by location, network, and ASN.">
+    <title>PingMap — Global IP Directory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>🌎 Global Ping Map</h1>
-    <p>Community IP address database.</p>
+    <div class="site-shell">
+        <header class="topbar">
+            <a class="brand" href="#top" aria-label="PingMap home">
+                <span class="brand-mark">⌁</span>
+                <span>Ping<span class="brand-accent">Map</span></span>
+            </a>
+            <nav class="nav-links" aria-label="Primary navigation">
+                <a href="#directory">Directory</a>
+                <a href="#countries">Locations</a>
+                <a href="#about">About</a>
+            </nav>
+            <button class="button button-small button-primary" id="open-submit-top">+ Submit IP</button>
+        </header>
+
+        <main id="top">
+            <section class="hero">
+                <div class="hero-inner">
+                    <div class="eyebrow"><span class="status-dot"></span> Community-maintained IP directory</div>
+                    <h1>Find public IPs<br><span>around the world.</span></h1>
+                    <p class="hero-copy">Search a growing database of contributed IP addresses by address, city, country, ISP, or ASN.</p>
+
+                    <form class="search-bar" id="search-form" role="search">
+                        <span class="search-icon">⌕</span>
+                        <input id="search-input" type="search" autocomplete="off" placeholder="Search IP, city, country, ISP, ASN…" aria-label="Search the IP directory">
+                        <button type="submit" class="button button-primary">Search</button>
+                    </form>
+                    <div class="search-hint"><kbd>/</kbd> to focus search</div>
+
+                    <div class="hero-stats" aria-label="Database statistics">
+                        <div><strong id="stat-ips">12</strong><span>sample IPs</span></div>
+                        <div><strong id="stat-countries">8</strong><span>countries</span></div>
+                        <div><strong id="stat-cities">10</strong><span>cities</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="content-section" id="directory">
+                <div class="section-heading">
+                    <div>
+                        <div class="section-kicker">DIRECTORY</div>
+                        <h2>Explore IPs</h2>
+                    </div>
+                    <div class="filter-row">
+                        <label class="select-wrap">
+                            <span class="sr-only">Filter by country</span>
+                            <select id="country-filter">
+                                <option value="">All countries</option>
+                            </select>
+                        </label>
+                        <button class="button button-ghost" id="clear-search">Clear</button>
+                    </div>
+                </div>
+
+                <div id="results" class="results-grid" aria-live="polite"></div>
+                <div id="empty-state" class="empty-state hidden">
+                    <div class="empty-icon">⌁</div>
+                    <h3>No matches found</h3>
+                    <p>Try a different IP, city, country, ISP, or ASN.</p>
+                </div>
+            </section>
+
+            <section class="content-section locations-section" id="countries">
+                <div class="section-heading">
+                    <div>
+                        <div class="section-kicker">LOCATIONS</div>
+                        <h2>Browse by country</h2>
+                    </div>
+                </div>
+                <div id="country-grid" class="country-grid"></div>
+            </section>
+
+            <section class="submit-section" id="submit">
+                <div class="submit-card">
+                    <div class="submit-copy">
+                        <div class="section-kicker">CONTRIBUTE</div>
+                        <h2>Know a public IP?<br>Put it on the map.</h2>
+                        <p>Submit an IP address and its approximate location to help grow the community directory. Public, routable addresses only.</p>
+                        <button class="button button-primary" id="open-submit-main">Submit an IP</button>
+                    </div>
+                    <div class="submit-visual" aria-hidden="true">
+                        <div class="radar-ring ring-1"></div>
+                        <div class="radar-ring ring-2"></div>
+                        <div class="radar-ring ring-3"></div>
+                        <div class="radar-center">+</div>
+                        <span class="map-dot dot-a"></span>
+                        <span class="map-dot dot-b"></span>
+                        <span class="map-dot dot-c"></span>
+                        <span class="map-dot dot-d"></span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="content-section about-section" id="about">
+                <div class="about-grid">
+                    <div>
+                        <div class="section-kicker">ABOUT PINGMAP</div>
+                        <h2>A simple public IP directory.</h2>
+                    </div>
+                    <div class="about-copy">
+                        <p>PingMap is designed as a searchable catalog of public IP addresses, organized by geography and network information. The goal is to make useful, human-readable IP lists easy to discover and contribute to.</p>
+                        <div class="principles">
+                            <div><span>01</span><strong>Searchable</strong><p>Find entries quickly with IP, city, country, ISP, or ASN.</p></div>
+                            <div><span>02</span><strong>Geographic</strong><p>Browse entries by country and city.</p></div>
+                            <div><span>03</span><strong>Community-built</strong><p>Grow the directory with public IP contributions.</p></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <div><strong>Ping<span class="brand-accent">Map</span></strong><span>Community IP directory</span></div>
+            <span>Built for public network discovery.</span>
+        </footer>
+    </div>
+
+    <div class="modal-backdrop hidden" id="submit-modal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <button class="modal-close" id="close-submit" aria-label="Close">×</button>
+            <div class="section-kicker">CONTRIBUTE</div>
+            <h2 id="modal-title">Submit a public IP</h2>
+            <p class="modal-copy">This prototype stores submissions in your browser only. We'll connect the form to the public database next.</p>
+            <form id="submit-form" class="submit-form">
+                <label>IP address<input id="ip-input" name="ip" required placeholder="203.0.113.42" inputmode="decimal"></label>
+                <div class="form-grid">
+                    <label>Country<input id="country-input" name="country" required placeholder="Canada"></label>
+                    <label>Region / State<input id="region-input" name="region" placeholder="Alberta"></label>
+                </div>
+                <div class="form-grid">
+                    <label>City<input id="city-input" name="city" placeholder="Edmonton"></label>
+                    <label>ISP / Network<input id="isp-input" name="isp" placeholder="Example ISP"></label>
+                </div>
+                <label>ASN <span class="muted">optional</span><input id="asn-input" name="asn" placeholder="AS12345"></label>
+                <button type="submit" class="button button-primary button-full">Add to local prototype</button>
+            </form>
+            <div id="form-message" class="form-message hidden"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>

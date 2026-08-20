@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "globalpingmap",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-20",
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS"
+  }
+}

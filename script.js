@@ -50,17 +50,12 @@ function populateCountryControls(selected = "") {
   const options = countryMaster.slice().sort((a,b) => a.name.localeCompare(b.name));
   countryInput.innerHTML = options.map(c => `<option value="${esc(c.code)}">${esc(flagFor(c.code))} ${esc(c.name)}</option>`).join("");
   if (selected) countryInput.value = selected;
-
   const current = countryFilter.value;
-  const unique = options;
-  countryFilter.innerHTML = '<option value="">All countries</option>' + unique.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
+  countryFilter.innerHTML = '<option value="">All countries</option>' + options.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
   countryFilter.value = current;
 }
 
-function setField(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.value = value ?? "";
-}
+function setField(id, value) { const el = document.getElementById(id); if (el) el.value = value ?? ""; }
 
 function loadFormGeo(geo) {
   setField("country-name-input", geo.country_name);
@@ -185,7 +180,7 @@ document.getElementById("use-my-ip").addEventListener("click", async () => {
 
 document.getElementById("back-to-ip").addEventListener("click", () => { geoStep.classList.add("hidden"); ipStep.classList.remove("hidden"); formMessage.classList.add("hidden"); });
 
-gelolocateButton.addEventListener("click", async () => {
+geolocateButton.addEventListener("click", async () => {
   const ip = ipInput.value.trim();
   if (!ip) return setMessage("Enter a public IP address first.", true);
   geolocateButton.disabled = true; geolocateButton.textContent = "Geolocating…"; formMessage.classList.add("hidden");

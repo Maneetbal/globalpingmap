@@ -4,26 +4,29 @@ Community-maintained public IP directory.
 
 ## Architecture
 
-- `index.html`, `style.css`, `script.js` — static frontend assets.
-- `src/index.js` — Cloudflare Worker API.
-- `migrations/0001_init.sql` — Cloudflare D1 schema.
-- `data/locations/` — location indexes and seed city metadata.
-- `data/countries/` — geographic hierarchy used for exports/imports.
+- `index.html`, `style.css`, `script.js` — static GitHub Pages frontend.
+- `data/countries/` — geographic hierarchy and per-city IP JSON files.
+- `data/index.json` — generated static search index used by the frontend.
+- `scripts/build-index.mjs` — rebuilds the static search index.
+- `scripts/process-submission.mjs` — validates and publishes IP submissions.
+- `.github/workflows/process-submission.yml` — processes IP submission issues with GitHub Actions.
+- `.github/workflows/pages.yml` — deploys the site to GitHub Pages.
 
-## Automatic submission flow
+There is no Cloudflare Worker and no D1 database in the PingMap architecture.
 
-1. Validate that the submitted address is a public IPv4/IPv6 address.
-2. Look up country, region, city, coordinates, ASN and network data with IP2Location.io's keyless API.
-3. Run a Globalping ICMP ping measurement.
-4. Reject the submission unless at least one ping response is received.
-5. Save the enriched record to D1.
+## Submission flow
 
-IP2Location.io currently documents a keyless limit of 1,000 geolocation queries/day, and its free API exposes country, region, city, latitude/longitude, ZIP, timezone, ASN and AS name. Globalping documents an unauthenticated API for ping measurements with a free allowance; the allowance is consumed per test rather than per HTTP request.
+1. A visitor enters a public IPv4/IPv6 address.
+2. The browser gets a preview from IP2Location.io's keyless API.
+3. The visitor sends the IP to GitHub as a pre-filled submission issue.
+4. GitHub Actions re-validates the IP and performs a fresh IP2Location lookup.
+5. GitHub Actions runs a Globalping ICMP measurement.
+6. The submission is rejected unless the IP responds.
+7. The enriched record is written to `data/countries/.../ips.json`.
+8. The static `data/index.json` is rebuilt and GitHub Pages updates automatically.
 
-## D1 setup
+The frontend never contains a GitHub write token. GitHub Actions uses its protected workflow token to modify repository data.
 
-Create a Cloudflare D1 database named `globalpingmap`, apply `migrations/0001_init.sql`, then add the D1 binding as `DB` in the Worker/`wrangler.jsonc`. Cloudflare's current D1 binding requires both the database name and database ID.
+## Data sources
 
-## Location data
-
-The location seed data is based on GeoNames, which provides free downloadable geographic data under CC BY 4.0. The live geolocation for submitted IPs is performed by IP2Location.io, so the city master catalog is an auxiliary browsing/index dataset rather than the source of truth for IP locations.
+IP2Location.io supplies geolocation and network metadata. Globalping supplies ICMP reachability measurements. Location seed data is based on GeoNames, which provides free downloadable geographic data under CC BY 4.0.

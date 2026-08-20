@@ -1,0 +1,28 @@
+{
+  "source": "GeoNames",
+  "license": "CC BY 4.0",
+  "description": "Seed catalog used for location browsing. Live IP geolocation is performed by IP2Location.io when an address is submitted.",
+  "cities": [
+    {"id":5128581,"country":"US","region":"New York","city":"New York","lat":40.7128,"lon":-74.006,"population":8804190},
+    {"id":5368361,"country":"US","region":"California","city":"Los Angeles","lat":34.0522,"lon":-118.2437,"population":3898747},
+    {"id":5391959,"country":"US","region":"California","city":"San Francisco","lat":37.7749,"lon":-122.4194,"population":808437},
+    {"id":4887398,"country":"US","region":"Illinois","city":"Chicago","lat":41.8781,"lon":-87.6298,"population":2746388},
+    {"id":4699066,"country":"US","region":"Texas","city":"Dallas","lat":32.7767,"lon":-96.797,"population":1288457},
+    {"id":4140963,"country":"US","region":"Washington","city":"Seattle","lat":47.6062,"lon":-122.3321,"population":755078},
+    {"id":4726206,"country":"US","region":"Texas","city":"Houston","lat":29.7604,"lon":-95.3698,"population":2304580},
+    {"id":4174757,"country":"US","region":"Florida","city":"Miami","lat":25.7617,"lon":-80.1918,"population":442241},
+    {"id":4259418,"country":"US","region":"Illinois","city":"Springfield","lat":39.7989,"lon":-89.644,"population":114394},
+    {"id":4560349,"country":"US","region":"Pennsylvania","city":"Philadelphia","lat":39.9526,"lon":-75.1652,"population":1603797},
+    {"id":6167865,"country":"CA","region":"Ontario","city":"Toronto","lat":43.6532,"lon":-79.3832,"population":2794356},
+    {"id":5913490,"country":"CA","region":"Quebec","city":"Montreal","lat":45.5017,"lon":-73.5673,"population":1762949},
+    {"id":6173331,"country":"CA","region":"British Columbia","city":"Vancouver","lat":49.2827,"lon":-123.1207,"population":662248},
+    {"id":5911606,"country":"CA","region":"Alberta","city":"Calgary","lat":51.0447,"lon":-114.0719,"population":1306784},
+    {"id":5946768,"country":"CA","region":"Alberta","city":"Edmonton","lat":53.5461,"lon":-113.4938,"population":1010899},
+    {"id":5128638,"country":"CA","region":"Manitoba","city":"Winnipeg","lat":49.8951,"lon":-97.1384,"population":749607},
+    {"id":2643743,"country":"GB","region":"England","city":"London","lat":51.5074,"lon":-0.1278,"population":7556900},
+    {"id":2950159,"country":"DE","region":"Berlin","city":"Berlin","lat":52.52,"lon":13.405,"population":3644826},
+    {"id":2759794,"country":"NL","region":"North Holland","city":"Amsterdam","lat":52.3676,"lon":4.9041,"population":921402},
+    {"id":1850147,"country":"JP","region":"Tokyo","city":"Tokyo","lat":35.6762,"lon":139.6503,"population":13960000},
+    {"id":2147714,"country":"AU","region":"New South Wales","city":"Sydney","lat":-33.8688,"lon":151.2093,"population":5312000}
+  ]
+}

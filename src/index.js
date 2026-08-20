@@ -13,20 +13,19 @@ function ipv4PrivateOrReserved(ip) {
   const p = ip.split(".").map(Number);
   const n = (((p[0] * 256 + p[1]) * 256 + p[2]) * 256 + p[3]) >>> 0;
   const ranges = [
-    [0x00000000, 0x00ffffff], // 0/8
-    [0x0a000000, 0x0affffff], // 10/8
-    [0x64400000, 0x647fffff], // 100.64/10
-    [0x7f000000, 0x7fffffff], // 127/8
-    [0xa9fe0000, 0xa9feffff], // 169.254/16
-    [0xac100000, 0xac1fffff], // 172.16/12
-    [0xc0000000, 0xc00000ff], // 192.0.0/24
-    [0xc0000200, 0xc00002ff], // 192.0.2/24
-    [0xc0a80000, 0xc0a8ffff], // 192.168/16
-    [0xc6120000, 0xc61200ff], // 198.18.0/15 partly covered below
+    [0x00000000, 0x00ffffff],
+    [0x0a000000, 0x0affffff],
+    [0x64400000, 0x647fffff],
+    [0x7f000000, 0x7fffffff],
+    [0xa9fe0000, 0xa9feffff],
+    [0xac100000, 0xac1fffff],
+    [0xc0000000, 0xc00000ff],
+    [0xc0000200, 0xc00002ff],
+    [0xc0a80000, 0xc0a8ffff],
     [0xc6120000, 0xc613ffff],
-    [0xc6336400, 0xc63364ff], // 198.51.100/24
-    [0xcb007100, 0xcb0071ff], // 203.0.113/24
-    [0xe0000000, 0xffffffff]  // multicast/reserved
+    [0xc6336400, 0xc63364ff],
+    [0xcb007100, 0xcb0071ff],
+    [0xe0000000, 0xffffffff]
   ];
   return ranges.some(([a, b]) => n >= a && n <= b);
 }
@@ -200,6 +199,18 @@ async function searchIps(request, env) {
   return json({ results, count: results.length });
 }
 
+async function countries(env) {
+  const db = await dbRequired(env);
+  const { results } = await db.prepare(`
+    SELECT country_code, country_name, COUNT(*) AS entries
+    FROM ip_entries
+    WHERE country_code IS NOT NULL
+    GROUP BY country_code, country_name
+    ORDER BY entries DESC, country_name ASC
+  `).all();
+  return json({ results });
+}
+
 async function stats(env) {
   const db = await dbRequired(env);
   const row = await db.prepare(`
@@ -218,10 +229,9 @@ async function api(request, env) {
     if (url.pathname === "/api/health" && request.method === "GET") {
       return json({ ok: true, database: Boolean(env.DB), geolocation: "IP2Location.io", reachability: "Globalping" });
     }
-    if (url.pathname === "/api/my-ip" && request.method === "GET") {
-      return json({ ip: request.headers.get("CF-Connecting-IP") || null });
-    }
+    if (url.pathname === "/api/my-ip" && request.method === "GET") return json({ ip: request.headers.get("CF-Connecting-IP") || null });
     if (url.pathname === "/api/search" && request.method === "GET") return await searchIps(request, env);
+    if (url.pathname === "/api/countries" && request.method === "GET") return await countries(env);
     if (url.pathname === "/api/stats" && request.method === "GET") return await stats(env);
     if (url.pathname === "/api/submit" && request.method === "POST") return await submitIp(request, env);
     return json({ error: "Not found" }, 404);

@@ -1,0 +1,8 @@
+{
+  "country_code": "CA",
+  "country_name": "Canada",
+  "region": "Alberta",
+  "city": "Edmonton",
+  "entries": [],
+  "note": "Live community IP submissions are stored in Cloudflare D1. This file documents the geographic hierarchy for exports/imports."
+}

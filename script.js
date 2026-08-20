@@ -1,28 +1,6 @@
-const sampleIps = [
-  { ip: "142.250.72.14", country: "United States", flag: "🇺🇸", region: "California", city: "Mountain View", isp: "Google", asn: "AS15169", version: "IPv4" },
-  { ip: "1.1.1.1", country: "United States", flag: "🇺🇸", region: "California", city: "San Francisco", isp: "Cloudflare", asn: "AS13335", version: "IPv4" },
-  { ip: "142.250.191.14", country: "United States", flag: "🇺🇸", region: "California", city: "Mountain View", isp: "Google", asn: "AS15169", version: "IPv4" },
-  { ip: "8.8.8.8", country: "United States", flag: "🇺🇸", region: "California", city: "Mountain View", isp: "Google", asn: "AS15169", version: "IPv4" },
-  { ip: "9.9.9.9", country: "United States", flag: "🇺🇸", region: "New York", city: "New York", isp: "Quad9", asn: "AS19281", version: "IPv4" },
-  { ip: "142.250.74.206", country: "Canada", flag: "🇨🇦", region: "Ontario", city: "Toronto", isp: "Google", asn: "AS15169", version: "IPv4" },
-  { ip: "142.250.70.46", country: "Canada", flag: "🇨🇦", region: "Alberta", city: "Edmonton", isp: "Google", asn: "AS15169", version: "IPv4" },
-  { ip: "208.67.222.222", country: "United States", flag: "🇺🇸", region: "California", city: "San Francisco", isp: "Cisco OpenDNS", asn: "AS36692", version: "IPv4" },
-  { ip: "9.9.9.10", country: "United States", flag: "🇺🇸", region: "New York", city: "New York", isp: "Quad9", asn: "AS19281", version: "IPv4" },
-  { ip: "77.88.8.8", country: "Russia", flag: "🇷🇺", region: "Moscow", city: "Moscow", isp: "Yandex", asn: "AS13238", version: "IPv4" },
-  { ip: "185.228.168.9", country: "United Kingdom", flag: "🇬🇧", region: "England", city: "London", isp: "CleanBrowsing", asn: "AS399486", version: "IPv4" },
-  { ip: "76.76.2.0", country: "United States", flag: "🇺🇸", region: "Virginia", city: "Ashburn", isp: "Control D", asn: "AS199524", version: "IPv4" }
-];
-
-let entries = [...sampleIps];
-const customKey = "pingmap-local-submissions";
-
-try {
-  const saved = JSON.parse(localStorage.getItem(customKey) || "[]");
-  if (Array.isArray(saved)) entries.push(...saved);
-} catch (_) {}
-
 const results = document.getElementById("results");
 const emptyState = document.getElementById("empty-state");
+const databaseState = document.getElementById("database-state");
 const searchInput = document.getElementById("search-input");
 const searchForm = document.getElementById("search-form");
 const countryFilter = document.getElementById("country-filter");
@@ -32,73 +10,124 @@ const statCountries = document.getElementById("stat-countries");
 const statCities = document.getElementById("stat-cities");
 const modal = document.getElementById("submit-modal");
 const formMessage = document.getElementById("form-message");
+const submitButton = document.getElementById("submit-button");
+const ipInput = document.getElementById("ip-input");
 
+const API = "/api";
 const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+const flagFor = (code) => ({CA:"🇨🇦",US:"🇺🇸",GB:"🇬🇧",DE:"🇩🇪",FR:"🇫🇷",NL:"🇳🇱",JP:"🇯🇵",AU:"🇦🇺"}[code] || "🌐");
 
-function renderStats() {
-  statIps.textContent = entries.length;
-  statCountries.textContent = new Set(entries.map(e => e.country)).size;
-  statCities.textContent = new Set(entries.map(e => `${e.city},${e.country}`)).size;
+async function getJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
 }
 
-function populateCountries() {
-  const countries = [...new Set(entries.map(e => e.country))].sort();
-  const current = countryFilter.value;
-  countryFilter.innerHTML = '<option value="">All countries</option>' + countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-  countryFilter.value = current;
+async function loadStats() {
+  try {
+    const data = await getJson(`${API}/stats`);
+    statIps.textContent = Number(data.ips || 0).toLocaleString();
+    statCountries.textContent = Number(data.countries || 0).toLocaleString();
+    statCities.textContent = Number(data.cities || 0).toLocaleString();
+    databaseState.classList.add("hidden");
+    return true;
+  } catch (error) {
+    statIps.textContent = "—";
+    statCountries.textContent = "—";
+    statCities.textContent = "—";
+    databaseState.textContent = `Database is not connected yet: ${error.message}`;
+    databaseState.classList.remove("hidden");
+    return false;
+  }
 }
 
-function renderCountryGrid() {
+async function loadCountries() {
+  try {
+    const data = await getJson(`${API}/search?limit=100`);
+    const countries = [...new Map((data.results || []).map(e => [e.country_code, e.country_name])).entries()]
+      .filter(([code]) => code)
+      .sort((a,b) => a[1].localeCompare(b[1]));
+    const current = countryFilter.value;
+    countryFilter.innerHTML = '<option value="">All countries</option>' + countries.map(([code,name]) => `<option value="${esc(code)}">${esc(name)}</option>`).join("");
+    countryFilter.value = current;
+    renderCountryGrid(data.results || []);
+  } catch (_) {
+    countryFilter.innerHTML = '<option value="">All countries</option>';
+    countryGrid.innerHTML = "";
+  }
+}
+
+function renderCountryGrid(items) {
   const grouped = {};
-  entries.forEach(e => grouped[e.country] = (grouped[e.country] || 0) + 1);
-  countryGrid.innerHTML = Object.entries(grouped).sort((a,b) => b[1] - a[1]).map(([country,count]) => {
-    const item = entries.find(e => e.country === country);
-    return `<button class="country-card" data-country="${esc(country)}"><div class="country-name"><span>${esc(item.flag || "🌐")}</span>${esc(country)}</div><div class="country-count">${count} ${count === 1 ? "entry" : "entries"}</div></button>`;
-  }).join("");
+  items.forEach(e => {
+    if (!e.country_code) return;
+    if (!grouped[e.country_code]) grouped[e.country_code] = { name: e.country_name || e.country_code, count: 0 };
+    grouped[e.country_code].count++;
+  });
+  countryGrid.innerHTML = Object.entries(grouped).sort((a,b) => b[1].count - a[1].count).map(([code,data]) => `
+    <button class="country-card" data-country="${esc(code)}">
+      <div class="country-name"><span>${flagFor(code)}</span>${esc(data.name)}</div>
+      <div class="country-count">${data.count} ${data.count === 1 ? "entry" : "entries"} in current results</div>
+    </button>`).join("");
   countryGrid.querySelectorAll("[data-country]").forEach(button => {
     button.addEventListener("click", () => {
       countryFilter.value = button.dataset.country;
       searchInput.value = "";
-      renderResults();
+      loadResults();
       document.getElementById("directory").scrollIntoView({ behavior: "smooth" });
     });
   });
 }
 
-function renderResults() {
-  const query = searchInput.value.trim().toLowerCase();
-  const country = countryFilter.value;
-  const filtered = entries.filter(e => {
-    const haystack = [e.ip,e.country,e.region,e.city,e.isp,e.asn,e.version].join(" ").toLowerCase();
-    return (!query || haystack.includes(query)) && (!country || e.country === country);
-  });
-
-  results.innerHTML = filtered.map(e => `
+function renderResults(items) {
+  results.innerHTML = items.map(e => `
     <article class="ip-card">
-      <div class="ip-top"><span class="ip-address">${esc(e.ip)}</span><span class="ip-version">${esc(e.version)}</span></div>
+      <div class="ip-top"><span class="ip-address">${esc(e.ip)}</span><span class="ip-version">IPv${esc(e.ip_version || (e.ip.includes(":") ? "6" : "4"))}</span></div>
       <div class="ip-meta">
-        <div class="meta-item"><span>Location</span><strong>${esc(e.city || "Unknown")}, ${esc(e.region || "")}</strong></div>
-        <div class="meta-item"><span>Network</span><strong>${esc(e.isp || "Unknown")}</strong></div>
-        <div class="meta-item"><span>Country</span><strong>${esc(e.country)}</strong></div>
-        <div class="meta-item"><span>ASN</span><strong>${esc(e.asn || "Not provided")}</strong></div>
+        <div class="meta-item"><span>Location</span><strong>${esc(e.city_name || "Unknown")}${e.region_name ? `, ${esc(e.region_name)}` : ""}</strong></div>
+        <div class="meta-item"><span>Network</span><strong>${esc(e.isp || e.as_name || "Unknown")}</strong></div>
+        <div class="meta-item"><span>Country</span><strong>${flagFor(e.country_code)} ${esc(e.country_name || e.country_code || "Unknown")}</strong></div>
+        <div class="meta-item"><span>ASN</span><strong>${e.asn ? `AS${esc(e.asn)}` : "Not provided"}</strong></div>
       </div>
-      <div class="card-footer"><span class="country-tag">${esc(e.flag || "🌐")} ${esc(e.country)}</span><button class="copy-ip" data-copy="${esc(e.ip)}">Copy IP</button></div>
+      <div class="card-footer"><span class="country-tag">${esc(e.latitude ?? "—")}, ${esc(e.longitude ?? "—")}</span><button class="copy-ip" data-copy="${esc(e.ip)}">Copy IP</button></div>
     </article>`).join("");
-
-  emptyState.classList.toggle("hidden", filtered.length !== 0);
-  results.classList.toggle("hidden", filtered.length === 0);
+  emptyState.classList.toggle("hidden", items.length !== 0);
+  results.classList.toggle("hidden", items.length === 0);
   results.querySelectorAll("[data-copy]").forEach(button => {
     button.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(button.dataset.copy); button.textContent = "Copied!"; setTimeout(() => button.textContent = "Copy IP", 1200); }
-      catch (_) { button.textContent = button.dataset.copy; }
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy);
+        button.textContent = "Copied!";
+        setTimeout(() => button.textContent = "Copy IP", 1200);
+      } catch (_) {
+        button.textContent = button.dataset.copy;
+      }
     });
   });
+}
+
+async function loadResults() {
+  const params = new URLSearchParams({ limit: "100" });
+  if (searchInput.value.trim()) params.set("q", searchInput.value.trim());
+  if (countryFilter.value) params.set("country", countryFilter.value);
+
+  try {
+    const data = await getJson(`${API}/search?${params}`);
+    renderResults(data.results || []);
+    databaseState.classList.add("hidden");
+  } catch (error) {
+    renderResults([]);
+    databaseState.textContent = `Search is unavailable: ${error.message}`;
+    databaseState.classList.remove("hidden");
+  }
 }
 
 function openModal() {
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
-  document.getElementById("ip-input").focus();
+  formMessage.classList.add("hidden");
+  ipInput.focus();
   document.body.style.overflow = "hidden";
 }
 function closeModal() {
@@ -106,47 +135,83 @@ function closeModal() {
   modal.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   formMessage.classList.add("hidden");
+  submitButton.disabled = false;
+  submitButton.textContent = "Geolocate + verify + add";
 }
 
-function validIp(ip) {
-  const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-  const ipv6 = /^[0-9a-f:]+$/i;
-  return ipv4.test(ip) || (ip.includes(":") && ipv6.test(ip) && ip.length <= 45);
+function setMessage(text, error = false) {
+  formMessage.textContent = text;
+  formMessage.classList.remove("hidden");
+  formMessage.style.color = error ? "#ff9e9e" : "";
+  formMessage.style.background = error ? "rgba(255,110,110,.08)" : "";
 }
 
-searchForm.addEventListener("submit", e => { e.preventDefault(); renderResults(); document.getElementById("directory").scrollIntoView({behavior:"smooth"}); });
-searchInput.addEventListener("input", renderResults);
-countryFilter.addEventListener("change", renderResults);
-document.getElementById("clear-search").addEventListener("click", () => { searchInput.value = ""; countryFilter.value = ""; renderResults(); });
-document.addEventListener("keydown", e => { if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); searchInput.focus(); } if (e.key === "Escape") closeModal(); });
+searchForm.addEventListener("submit", e => {
+  e.preventDefault();
+  loadResults();
+  document.getElementById("directory").scrollIntoView({behavior:"smooth"});
+});
+searchInput.addEventListener("input", () => {
+  clearTimeout(window.__pingmapSearchTimer);
+  window.__pingmapSearchTimer = setTimeout(loadResults, 180);
+});
+countryFilter.addEventListener("change", loadResults);
+document.getElementById("clear-search").addEventListener("click", () => {
+  searchInput.value = "";
+  countryFilter.value = "";
+  loadResults();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); searchInput.focus(); }
+  if (e.key === "Escape") closeModal();
+});
 document.getElementById("open-submit-top").addEventListener("click", openModal);
 document.getElementById("open-submit-main").addEventListener("click", openModal);
 document.getElementById("close-submit").addEventListener("click", closeModal);
 modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
 
-document.getElementById("submit-form").addEventListener("submit", e => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(e.target).entries());
-  if (!validIp(data.ip.trim())) {
-    formMessage.textContent = "Please enter a valid IPv4 or IPv6 address.";
-    formMessage.classList.remove("hidden");
-    return;
+document.getElementById("use-my-ip").addEventListener("click", async () => {
+  try {
+    const data = await getJson(`${API}/my-ip`);
+    if (data.ip) ipInput.value = data.ip;
+    else setMessage("Cloudflare did not expose a public client IP for this request.", true);
+  } catch (error) {
+    setMessage(error.message, true);
   }
-  if (entries.some(x => x.ip.toLowerCase() === data.ip.trim().toLowerCase())) {
-    formMessage.textContent = "That IP is already in the directory.";
-    formMessage.classList.remove("hidden");
-    return;
-  }
-  const item = { ip:data.ip.trim(), country:data.country.trim(), region:data.region.trim(), city:data.city.trim(), isp:data.isp.trim(), asn:data.asn.trim(), version:data.ip.includes(":") ? "IPv6" : "IPv4", flag:"🌐" };
-  entries.push(item);
-  try { localStorage.setItem(customKey, JSON.stringify(entries.slice(sampleIps.length))); } catch (_) {}
-  populateCountries(); renderStats(); renderCountryGrid(); renderResults();
-  formMessage.textContent = "Added to this browser's local prototype directory. The shared database comes next.";
-  formMessage.classList.remove("hidden");
-  e.target.reset();
 });
 
-renderStats();
-populateCountries();
-renderCountryGrid();
-renderResults();
+document.getElementById("submit-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const ip = ipInput.value.trim();
+  if (!ip) {
+    setMessage("Enter a public IP address first.", true);
+    return;
+  }
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Checking geolocation + reachability…";
+  setMessage("Looking up the IP and running an ICMP reachability check. This may take a few seconds.");
+
+  try {
+    const data = await getJson(`${API}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ip })
+    });
+    const e = data.entry;
+    setMessage(`Added ${e.ip} — ${e.city_name}, ${e.region_name}, ${e.country_name}. Ping average: ${data.ping.avgMs ?? "—"} ms.`);
+    e.target = "";
+    await Promise.all([loadStats(), loadResults(), loadCountries()]);
+    submitButton.textContent = "Added!";
+  } catch (error) {
+    setMessage(error.message, true);
+    submitButton.disabled = false;
+    submitButton.textContent = "Geolocate + verify + add";
+  }
+});
+
+(async function init() {
+  await loadStats();
+  await loadResults();
+  await loadCountries();
+})();

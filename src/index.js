@@ -1,5 +1,5 @@
 const RATE_LIMIT = new Map();
-const RATE_WINDOW_MS = 60_000;
+const RATE_WINDOW_MS = 30_000;
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -13,18 +13,10 @@ function ipv4PrivateOrReserved(ip) {
   const p = ip.split(".").map(Number);
   const n = (((p[0] * 256 + p[1]) * 256 + p[2]) * 256 + p[3]) >>> 0;
   const ranges = [
-    [0x00000000, 0x00ffffff],
-    [0x0a000000, 0x0affffff],
-    [0x64400000, 0x647fffff],
-    [0x7f000000, 0x7fffffff],
-    [0xa9fe0000, 0xa9feffff],
-    [0xac100000, 0xac1fffff],
-    [0xc0000000, 0xc00000ff],
-    [0xc0000200, 0xc00002ff],
-    [0xc0a80000, 0xc0a8ffff],
-    [0xc6120000, 0xc613ffff],
-    [0xc6336400, 0xc63364ff],
-    [0xcb007100, 0xcb0071ff],
+    [0x00000000, 0x00ffffff], [0x0a000000, 0x0affffff], [0x64400000, 0x647fffff],
+    [0x7f000000, 0x7fffffff], [0xa9fe0000, 0xa9feffff], [0xac100000, 0xac1fffff],
+    [0xc0000000, 0xc00000ff], [0xc0000200, 0xc00002ff], [0xc0a80000, 0xc0a8ffff],
+    [0xc6120000, 0xc613ffff], [0xc6336400, 0xc63364ff], [0xcb007100, 0xcb0071ff],
     [0xe0000000, 0xffffffff]
   ];
   return ranges.some(([a, b]) => n >= a && n <= b);
@@ -70,38 +62,26 @@ async function pingWithGlobalping(ip) {
       measurementOptions: { packets: 3, ipVersion: isIPv6(ip) ? 6 : 4 }
     })
   });
-
   if (!createResponse.ok) {
     const text = await createResponse.text();
     throw new Error(`Globalping create failed (${createResponse.status}): ${text.slice(0, 180)}`);
   }
-
   const created = await createResponse.json();
   const id = created?.id;
   if (!id) throw new Error("Globalping did not return a measurement ID");
 
-  for (let attempt = 0; attempt < 7; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     if (attempt) await new Promise(resolve => setTimeout(resolve, 900));
     const resultResponse = await fetch(`https://api.globalping.io/v1/measurements/${encodeURIComponent(id)}`);
     if (!resultResponse.ok) continue;
     const result = await resultResponse.json();
     if (result.status === "in-progress") continue;
-
     const measurements = Array.isArray(result.results) ? result.results : [];
     const stats = measurements.map(item => item?.result?.stats).filter(Boolean);
     const responsive = stats.find(s => Number(s.rcv || 0) > 0 || Number(s.loss) < 100);
-    if (responsive) {
-      return {
-        reachable: true,
-        loss: Number(responsive.loss ?? 0),
-        avgMs: Number(responsive.avg ?? 0),
-        measurementId: id
-      };
-    }
-
+    if (responsive) return { reachable: true, loss: Number(responsive.loss ?? 0), avgMs: Number(responsive.avg ?? 0), measurementId: id };
     return { reachable: false, loss: 100, avgMs: null, measurementId: id };
   }
-
   throw new Error("Globalping measurement timed out");
 }
 
@@ -110,13 +90,38 @@ async function dbRequired(env) {
   return env.DB;
 }
 
+async function previewIp(request) {
+  const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+  if (rateLimited(`preview:${clientIp}`)) return json({ error: "Please wait before requesting another geolocation preview." }, 429);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
+  const ip = String(body?.ip || "").trim().toLowerCase();
+  if (!publicIp(ip)) return json({ error: "Only public IPv4/IPv6 addresses can be previewed." }, 400);
+  const geo = await geolocate(ip);
+  return json({ ok: true, ip, geo: {
+    country_code: geo.country_code || "",
+    country_name: geo.country_name || "",
+    region_name: geo.region_name || "",
+    city_name: geo.city_name || "",
+    latitude: geo.latitude ?? null,
+    longitude: geo.longitude ?? null,
+    zip_code: geo.zip_code || "",
+    time_zone: geo.time_zone || "",
+    asn: geo.asn ? String(geo.asn) : "",
+    as_name: geo.as || "",
+    isp: geo.isp || geo.as || "",
+    domain: geo.domain || "",
+    usage_type: geo.usage_type || "",
+    is_proxy: geo.is_proxy ? 1 : 0
+  }});
+}
+
 async function submitIp(request, env) {
   const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
-  if (rateLimited(clientIp)) return json({ error: "Please wait a minute before submitting another IP." }, 429);
+  if (rateLimited(`submit:${clientIp}`)) return json({ error: "Please wait before submitting another IP." }, 429);
 
   let body;
   try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
-
   const ip = String(body?.ip || "").trim().toLowerCase();
   if (!publicIp(ip)) return json({ error: "Only public IPv4/IPv6 addresses can be submitted." }, 400);
 
@@ -124,29 +129,28 @@ async function submitIp(request, env) {
   const duplicate = await db.prepare("SELECT id, ip FROM ip_entries WHERE ip = ? LIMIT 1").bind(ip).first();
   if (duplicate) return json({ error: "That IP is already in PingMap.", entry: duplicate }, 409);
 
-  const [geo, ping] = await Promise.all([geolocate(ip), pingWithGlobalping(ip)]);
-  if (!ping.reachable) {
-    return json({ error: "The IP did not answer the ICMP reachability check, so it was not added.", ping }, 422);
-  }
+  const ping = await pingWithGlobalping(ip);
+  if (!ping.reachable) return json({ error: "The IP did not answer the ICMP reachability check, so it was not added.", ping }, 422);
 
   const now = new Date().toISOString();
+  const clean = (value) => String(value ?? "").trim().slice(0, 300);
   const entry = {
     ip,
     ip_version: isIPv6(ip) ? 6 : 4,
-    country_code: geo.country_code || null,
-    country_name: geo.country_name || null,
-    region_name: geo.region_name || null,
-    city_name: geo.city_name || null,
-    latitude: geo.latitude ?? null,
-    longitude: geo.longitude ?? null,
-    zip_code: geo.zip_code || null,
-    time_zone: geo.time_zone || null,
-    asn: geo.asn ? String(geo.asn) : null,
-    as_name: geo.as || null,
-    isp: geo.isp || geo.as || null,
-    domain: geo.domain || null,
-    usage_type: geo.usage_type || null,
-    is_proxy: geo.is_proxy ? 1 : 0,
+    country_code: clean(body?.country_code).toUpperCase().slice(0, 2),
+    country_name: clean(body?.country_name),
+    region_name: clean(body?.region_name),
+    city_name: clean(body?.city_name),
+    latitude: Number.isFinite(Number(body?.latitude)) ? Number(body.latitude) : null,
+    longitude: Number.isFinite(Number(body?.longitude)) ? Number(body.longitude) : null,
+    zip_code: clean(body?.zip_code),
+    time_zone: clean(body?.time_zone),
+    asn: clean(body?.asn).replace(/^AS/i, "").slice(0, 20),
+    as_name: clean(body?.as_name),
+    isp: clean(body?.isp),
+    domain: clean(body?.domain),
+    usage_type: clean(body?.usage_type),
+    is_proxy: body?.is_proxy ? 1 : 0,
     is_reachable: 1,
     ping_avg_ms: ping.avgMs,
     ping_loss: ping.loss,
@@ -154,6 +158,8 @@ async function submitIp(request, env) {
     submitted_at: now,
     source: "community"
   };
+
+  if (!entry.country_code || !entry.country_name) return json({ error: "Country is required." }, 400);
 
   await db.prepare(`
     INSERT INTO ip_entries (
@@ -180,7 +186,6 @@ async function searchIps(request, env) {
   const country = url.searchParams.get("country")?.trim() || "";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 50), 1), 100);
   const db = await dbRequired(env);
-
   let sql = `SELECT * FROM ip_entries WHERE 1=1`;
   const params = [];
   if (q) {
@@ -188,48 +193,30 @@ async function searchIps(request, env) {
     const like = `%${q}%`;
     params.push(like, like, like, like, like, like, like, like, like);
   }
-  if (country) {
-    sql += ` AND country_code = ?`;
-    params.push(country);
-  }
-  sql += ` ORDER BY submitted_at DESC LIMIT ?`;
-  params.push(limit);
-
+  if (country) { sql += ` AND country_code = ?`; params.push(country); }
+  sql += ` ORDER BY submitted_at DESC LIMIT ?`; params.push(limit);
   const { results } = await db.prepare(sql).bind(...params).all();
   return json({ results, count: results.length });
 }
 
 async function countries(env) {
   const db = await dbRequired(env);
-  const { results } = await db.prepare(`
-    SELECT country_code, country_name, COUNT(*) AS entries
-    FROM ip_entries
-    WHERE country_code IS NOT NULL
-    GROUP BY country_code, country_name
-    ORDER BY entries DESC, country_name ASC
-  `).all();
+  const { results } = await db.prepare(`SELECT country_code, country_name, COUNT(*) AS entries FROM ip_entries WHERE country_code IS NOT NULL GROUP BY country_code, country_name ORDER BY country_name ASC`).all();
   return json({ results });
 }
 
 async function stats(env) {
   const db = await dbRequired(env);
-  const row = await db.prepare(`
-    SELECT
-      COUNT(*) AS ips,
-      COUNT(DISTINCT country_code) AS countries,
-      COUNT(DISTINCT country_code || ':' || city_name) AS cities
-    FROM ip_entries
-  `).first();
+  const row = await db.prepare(`SELECT COUNT(*) AS ips, COUNT(DISTINCT country_code) AS countries, COUNT(DISTINCT country_code || ':' || city_name) AS cities FROM ip_entries`).first();
   return json(row || { ips: 0, countries: 0, cities: 0 });
 }
 
 async function api(request, env) {
   const url = new URL(request.url);
   try {
-    if (url.pathname === "/api/health" && request.method === "GET") {
-      return json({ ok: true, database: Boolean(env.DB), geolocation: "IP2Location.io", reachability: "Globalping" });
-    }
+    if (url.pathname === "/api/health" && request.method === "GET") return json({ ok: true, database: Boolean(env.DB), geolocation: "IP2Location.io", reachability: "Globalping" });
     if (url.pathname === "/api/my-ip" && request.method === "GET") return json({ ip: request.headers.get("CF-Connecting-IP") || null });
+    if (url.pathname === "/api/preview" && request.method === "POST") return await previewIp(request);
     if (url.pathname === "/api/search" && request.method === "GET") return await searchIps(request, env);
     if (url.pathname === "/api/countries" && request.method === "GET") return await countries(env);
     if (url.pathname === "/api/stats" && request.method === "GET") return await stats(env);

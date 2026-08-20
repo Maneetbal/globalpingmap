@@ -40,9 +40,9 @@
                     <div class="search-hint"><kbd>/</kbd> to focus search</div>
 
                     <div class="hero-stats" aria-label="Database statistics">
-                        <div><strong id="stat-ips">12</strong><span>sample IPs</span></div>
-                        <div><strong id="stat-countries">8</strong><span>countries</span></div>
-                        <div><strong id="stat-cities">10</strong><span>cities</span></div>
+                        <div><strong id="stat-ips">—</strong><span>IPs</span></div>
+                        <div><strong id="stat-countries">—</strong><span>countries</span></div>
+                        <div><strong id="stat-cities">—</strong><span>cities</span></div>
                     </div>
                 </div>
             </section>
@@ -70,6 +70,7 @@
                     <h3>No matches found</h3>
                     <p>Try a different IP, city, country, ISP, or ASN.</p>
                 </div>
+                <div id="database-state" class="empty-state hidden"></div>
             </section>
 
             <section class="content-section locations-section" id="countries">
@@ -87,7 +88,7 @@
                     <div class="submit-copy">
                         <div class="section-kicker">CONTRIBUTE</div>
                         <h2>Know a public IP?<br>Put it on the map.</h2>
-                        <p>Submit an IP address and its approximate location to help grow the community directory. Public, routable addresses only.</p>
+                        <p>Enter a public IP. PingMap automatically looks up its geography and network data, then checks whether it answers an ICMP ping before it can be added.</p>
                         <button class="button button-primary" id="open-submit-main">Submit an IP</button>
                     </div>
                     <div class="submit-visual" aria-hidden="true">
@@ -110,11 +111,11 @@
                         <h2>A simple public IP directory.</h2>
                     </div>
                     <div class="about-copy">
-                        <p>PingMap is designed as a searchable catalog of public IP addresses, organized by geography and network information. The goal is to make useful, human-readable IP lists easy to discover and contribute to.</p>
+                        <p>PingMap is designed as a searchable catalog of public IP addresses, organized by geography and network information. Location data comes from IP2Location.io, while reachability checks use Globalping.</p>
                         <div class="principles">
                             <div><span>01</span><strong>Searchable</strong><p>Find entries quickly with IP, city, country, ISP, or ASN.</p></div>
-                            <div><span>02</span><strong>Geographic</strong><p>Browse entries by country and city.</p></div>
-                            <div><span>03</span><strong>Community-built</strong><p>Grow the directory with public IP contributions.</p></div>
+                            <div><span>02</span><strong>Automatic geolocation</strong><p>Submitted addresses are enriched with country, region, city, coordinates, ASN, and network information.</p></div>
+                            <div><span>03</span><strong>Community-built</strong><p>Contributors grow the shared directory with public, reachable IPs.</p></div>
                         </div>
                     </div>
                 </div>
@@ -123,7 +124,7 @@
 
         <footer class="footer">
             <div><strong>Ping<span class="brand-accent">Map</span></strong><span>Community IP directory</span></div>
-            <span>Built for public network discovery.</span>
+            <span>Geo data: IP2Location.io • Reachability: Globalping</span>
         </footer>
     </div>
 
@@ -132,19 +133,14 @@
             <button class="modal-close" id="close-submit" aria-label="Close">×</button>
             <div class="section-kicker">CONTRIBUTE</div>
             <h2 id="modal-title">Submit a public IP</h2>
-            <p class="modal-copy">This prototype stores submissions in your browser only. We'll connect the form to the public database next.</p>
+            <p class="modal-copy">We'll automatically geolocate the address and run a reachability check. The IP is only added after both checks succeed.</p>
             <form id="submit-form" class="submit-form">
-                <label>IP address<input id="ip-input" name="ip" required placeholder="203.0.113.42" inputmode="decimal"></label>
-                <div class="form-grid">
-                    <label>Country<input id="country-input" name="country" required placeholder="Canada"></label>
-                    <label>Region / State<input id="region-input" name="region" placeholder="Alberta"></label>
+                <label>IP address<input id="ip-input" name="ip" required placeholder="8.8.8.8" inputmode="decimal"></label>
+                <div class="form-actions-row">
+                    <button type="button" class="button button-ghost" id="use-my-ip">Use my IP</button>
+                    <span class="form-help">Your IP is not submitted automatically.</span>
                 </div>
-                <div class="form-grid">
-                    <label>City<input id="city-input" name="city" placeholder="Edmonton"></label>
-                    <label>ISP / Network<input id="isp-input" name="isp" placeholder="Example ISP"></label>
-                </div>
-                <label>ASN <span class="muted">optional</span><input id="asn-input" name="asn" placeholder="AS12345"></label>
-                <button type="submit" class="button button-primary button-full">Add to local prototype</button>
+                <button type="submit" class="button button-primary button-full" id="submit-button">Geolocate + verify + add</button>
             </form>
             <div id="form-message" class="form-message hidden"></div>
         </div>

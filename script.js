@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const on=(id,event,fn)=>{const el=$(id);if(el)el.addEventListener(event,fn);return el};
 const DATA="data/index.json";
-const API_BASE="https://globalpingmap.balmaneet10.workers.dev/api";
+const GITHUB_ISSUE_URL="https://github.com/Maneetbal/globalpingmap/issues/new";
 const results=$("results"),emptyState=$("empty-state"),databaseState=$("database-state"),searchInput=$("search-input"),countryFilter=$("country-filter"),countryGrid=$("country-grid"),statIps=$("stat-ips"),statCountries=$("stat-countries"),statCities=$("stat-cities"),modal=$("submit-modal"),formMessage=$("form-message"),submitForm=$("submit-form"),submitButton=$("submit-button"),geolocateButton=$("geolocate-button"),ipInput=$("ip-input"),editedIpInput=$("edited-ip-input"),geoStep=$("geo-step"),ipStep=$("ip-step");
 let entries=[],currentPreview=null;
 const esc=v=>String(v??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':'&quot;'}[c]));
@@ -21,12 +21,36 @@ function renderCountryGrid(items){if(!countryGrid)return;const g={};items.forEac
 function populateCountries(items){if(!countryFilter)return;const old=countryFilter.value;const map=new Map(items.map(e=>[e.country_code,e.country_name||e.country_code]));countryFilter.innerHTML='<option value="">All countries</option>'+[...map.entries()].sort((a,b)=>a[1].localeCompare(b[1])).map(([c,n])=>`<option value="${esc(c)}">${flagFor(c)} ${esc(n)}</option>`).join("");countryFilter.value=old}
 function loadResults(){let r=[...entries],q=searchInput?.value.trim().toLowerCase()||"",c=countryFilter?.value||"";if(q)r=r.filter(e=>[e.ip,e.country_name,e.country_code,e.region_name,e.city_name,e.organization,e.isp,e.usage_type,e.as_name,e.asn].some(v=>String(v??"").toLowerCase().includes(q)));if(c)r=r.filter(e=>String(e.country_code||"").toUpperCase()===c);r.sort((a,b)=>String(b.submitted_at||"").localeCompare(String(a.submitted_at||"")));renderResults(r);renderCountryGrid(r)}
 async function loadData(){try{const d=await getJson(DATA);entries=Array.isArray(d)?d:(d.entries||[]);populateCountries(entries);if(statIps)statIps.textContent=entries.length.toLocaleString();if(statCountries)statCountries.textContent=new Set(entries.map(e=>e.country_code).filter(Boolean)).size.toLocaleString();if(statCities)statCities.textContent=new Set(entries.map(e=>`${e.country_code}:${e.region_name}:${e.city_name}`).filter(Boolean)).size.toLocaleString();databaseState?.classList.add("hidden");loadResults()}catch(e){if(databaseState){databaseState.textContent=`Database is unavailable: ${e.message}`;databaseState.classList.remove("hidden")}}}
-function openModal(){if(!modal)return;modal.classList.remove("hidden");modal.setAttribute("aria-hidden","false");ipStep?.classList.remove("hidden");geoStep?.classList.add("hidden");formMessage?.classList.add("hidden");currentPreview=null;if(geolocateButton){geolocateButton.disabled=false;geolocateButton.textContent="Geolocate IP"}if(submitButton){submitButton.disabled=false;submitButton.textContent="Submit IP"}ipInput?.focus();document.body.style.overflow="hidden"}
+function openModal(){if(!modal)return;modal.classList.remove("hidden");modal.setAttribute("aria-hidden","false");ipStep?.classList.remove("hidden");geoStep?.classList.add("hidden");formMessage?.classList.add("hidden");currentPreview=null;if(geolocateButton){geolocateButton.disabled=false;geolocateButton.textContent="Geolocate IP"}if(submitButton){submitButton.disabled=false;submitButton.textContent="Open GitHub submission"}ipInput?.focus();document.body.style.overflow="hidden"}
 function closeModal(){if(!modal)return;modal.classList.add("hidden");modal.setAttribute("aria-hidden","true");document.body.style.overflow=""}
 function loadFormGeo(geo,ip){setField("country-name-input",geo.country_name||geo.country||"");setField("region-input",geo.region_name||geo.region||"");setField("city-input",geo.city_name||geo.city||"");setField("organization-input",geo.isp||geo.as_name||geo.as||geo.organization||geo.connection?.org||geo.connection?.isp||"");const proxy=geo.is_proxy===true||geo.is_proxy===1||String(geo.is_proxy).toLowerCase()==="true"||geo.security?.vpn===true||geo.security?.proxy===true||geo.security?.tor===true?"Proxy/VPN":(geo.usage_type||geo.connection?.connection_type||"Not detected");setField("proxy-input",proxy);setField("edited-ip-input",ip)}
+function openGithubSubmission(){
+  if(!currentPreview)return setMessage("Geolocate the IP first.",true);
+  const ip=getField("edited-ip-input");
+  if(!ip)return setMessage("Enter an IP address.",true);
+  const g=currentPreview.geo||{};
+  const body=[
+    `IP: ${ip}`,
+    "",
+    "PingMap preview (will be re-validated by GitHub Actions):",
+    `Country: ${g.country_name||g.country||""}`,
+    `Country code: ${g.country_code||""}`,
+    `Region: ${g.region_name||g.region||""}`,
+    `City: ${g.city_name||g.city||""}`,
+    `Organization: ${g.isp||g.as_name||g.connection?.org||""}`,
+    `ASN: ${g.asn||g.connection?.asn||""}`,
+    `Usage type: ${g.usage_type||""}`,
+    `Proxy/VPN: ${Boolean(g.is_proxy||g.security?.vpn||g.security?.proxy||g.security?.tor)}`,
+    "",
+    "Please process this submission using the PingMap GitHub Action."
+  ].join("\\n");
+  const url=`${GITHUB_ISSUE_URL}?title=${encodeURIComponent(`IP submission: ${ip}`)}&body=${encodeURIComponent(body)}`;
+  window.open(url,"_blank","noopener,noreferrer");
+  setMessage("GitHub opened in a new tab. Submit the pre-filled issue there; PingMap will validate it automatically.");
+}
 on("search-input","input",()=>{clearTimeout(window.__pm);window.__pm=setTimeout(loadResults,120)});on("country-filter","change",loadResults);on("clear-search","click",()=>{if(searchInput)searchInput.value="";if(countryFilter)countryFilter.value="";loadResults()});document.addEventListener("keydown",e=>{if(e.key==="/"&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();searchInput?.focus()}if(e.key==="Escape")closeModal()});on("open-submit-top","click",openModal);on("open-submit-main","click",openModal);on("close-submit","click",closeModal);modal?.addEventListener("click",e=>{if(e.target===modal)closeModal()});
 on("use-my-ip","click",async()=>{try{const d=await getJson("https://api.ipify.org?format=json");if(ipInput)ipInput.value=d.ip;else throw new Error("Could not detect your IP.")}catch(e){setMessage(`Could not detect your IP: ${e.message}`,true)}});
 on("back-to-ip","click",()=>{geoStep?.classList.add("hidden");ipStep?.classList.remove("hidden");formMessage?.classList.add("hidden");if(ipInput)ipInput.value=getField("edited-ip-input")||ipInput.value});
-on("geolocate-button","click",async()=>{const ip=ipInput?.value.trim()||"";if(!ip)return setMessage("Enter a public IP address first.",true);geolocateButton.disabled=true;geolocateButton.textContent="Geolocating…";formMessage?.classList.add("hidden");try{const d=await geolocatePublicIp(ip);currentPreview=d;loadFormGeo(d.geo,d.ip);ipStep?.classList.add("hidden");geoStep?.classList.remove("hidden");setMessage("Geolocation found. Review the information, then submit the IP directly to PingMap.")}catch(e){setMessage(`Geolocation failed: ${e.message||"Unable to contact the geolocation service."}`,true)}finally{geolocateButton.disabled=false;geolocateButton.textContent="Geolocate IP"}});
-submitForm?.addEventListener("submit",async e=>{e.preventDefault();if(!currentPreview)return setMessage("Geolocate the IP first.",true);const ip=getField("edited-ip-input");if(!ip)return setMessage("Enter an IP address.",true);submitButton.disabled=true;submitButton.textContent="Verifying…";formMessage?.classList.add("hidden");try{const g=currentPreview.geo;const d=await getJson(`${API_BASE}/submit`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ip,country_code:g.country_code,country_name:g.country_name||g.country,region_name:g.region_name||g.region,city_name:g.city_name||g.city,latitude:g.latitude,longitude:g.longitude,zip_code:g.zip_code||g.postal,time_zone:g.time_zone||g.timezone,asn:g.asn,as_name:g.as_name||g.as,isp:g.isp||g.connection?.org||g.connection?.isp,domain:g.domain,usage_type:g.usage_type,is_proxy:g.is_proxy||g.security?.vpn||g.security?.proxy||g.security?.tor})});if(!d.ok&&!d.success)throw new Error(d.error||"Submission failed.");setMessage("IP verified and added to PingMap.");submitButton.textContent="Added ✓";setTimeout(()=>{closeModal();loadData()},1400)}catch(e){setMessage(`Submission failed: ${e.message||"Unable to submit the IP."}`,true);submitButton.disabled=false;submitButton.textContent="Submit IP"}});
+on("geolocate-button","click",async()=>{const ip=ipInput?.value.trim()||"";if(!ip)return setMessage("Enter a public IP address first.",true);geolocateButton.disabled=true;geolocateButton.textContent="Geolocating…";formMessage?.classList.add("hidden");try{const d=await geolocatePublicIp(ip);currentPreview=d;loadFormGeo(d.geo,d.ip);ipStep?.classList.add("hidden");geoStep?.classList.remove("hidden");setMessage("Geolocation found. Review the information, then submit the pre-filled GitHub issue for validation.")}catch(e){setMessage(`Geolocation failed: ${e.message||"Unable to contact the geolocation service."}`,true)}finally{geolocateButton.disabled=false;geolocateButton.textContent="Geolocate IP"}});
+submitForm?.addEventListener("submit",async e=>{e.preventDefault();openGithubSubmission()});
 loadData();

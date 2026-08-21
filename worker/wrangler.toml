@@ -1,3 +1,11 @@
 name = "globalpingmap"
 main = "./index.js"
 compatibility_date = "2026-08-21"
+
+[[durable_objects.bindings]]
+name = "PINGMAP_DIRECTORY"
+class_name = "PingMapDirectory"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PingMapDirectory"]

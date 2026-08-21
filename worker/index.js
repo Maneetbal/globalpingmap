@@ -14,8 +14,7 @@ function response(body, status = 200) {
 
 function isIPv4(ip) {
   const parts = ip.split(".");
-  if (parts.length !== 4) return false;
-  return parts.every(p => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+  return parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p) && Number(p) <= 255);
 }
 
 function isIPv6(ip) {
@@ -26,96 +25,89 @@ function isPublicIp(ip) {
   if (isIPv4(ip)) {
     const p = ip.split(".").map(Number);
     const n = (((p[0] * 256 + p[1]) * 256 + p[2]) * 256 + p[3]) >>> 0;
-    const privateRanges = [
-      [0x00000000, 0x00ffffff],
-      [0x0a000000, 0x0affffff],
-      [0x64400000, 0x647fffff],
-      [0x7f000000, 0x7fffffff],
-      [0xa9fe0000, 0xa9feffff],
-      [0xac100000, 0xac1fffff],
-      [0xc0000000, 0xc00000ff],
-      [0xc0000200, 0xc00002ff],
-      [0xc0a80000, 0xc0a8ffff],
+    const blocked = [
+      [0x00000000, 0x00ffffff], [0x0a000000, 0x0affffff], [0x64400000, 0x647fffff],
+      [0x7f000000, 0x7fffffff], [0xa9fe0000, 0xa9feffff], [0xac100000, 0xac1fffff],
+      [0xc0000000, 0xc00000ff], [0xc0000200, 0xc00002ff], [0xc0a80000, 0xc0a8ffff],
       [0xe0000000, 0xffffffff]
     ];
-    return !privateRanges.some(([a, b]) => n >= a && n <= b);
+    return !blocked.some(([a, b]) => n >= a && n <= b);
   }
   if (!isIPv6(ip)) return false;
   const x = ip.toLowerCase();
   return x !== "::" && x !== "::1" && !/^f[cd]|^fe[89ab]|^ff/i.test(x);
 }
 
-function githubHeaders(env) {
-  return {
-    Authorization: `Bearer ${env.PINGMAP_GITHUB_TOKEN}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "PingMap-Submission-Gateway",
-    "Content-Type": "application/json"
-  };
+function clean(value, max = 500) {
+  return String(value ?? "").trim().slice(0, max);
 }
 
-async function github(env, path, options = {}) {
-  if (!env.PINGMAP_GITHUB_TOKEN) throw new Error("PingMap backend is not configured.");
-  const repo = env.GITHUB_REPOSITORY || "Maneetbal/globalpingmap";
-  const r = await fetch(`https://api.github.com/repos/${repo}${path}`, {
-    ...options,
-    headers: { ...githubHeaders(env), ...(options.headers || {}) }
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`GitHub API ${r.status}: ${data.message || "request failed"}`);
-  return data;
+async function readAll(directory) {
+  return directory.storage.get("entries") || [];
 }
 
-async function createSubmission(env, payload) {
-  const ip = String(payload.ip || "").trim().toLowerCase();
+async function writeAll(directory, entries) {
+  await directory.storage.put("entries", entries);
+}
+
+function normalizeEntry(payload) {
+  const ip = clean(payload.ip, 64).toLowerCase();
+  const rows = Array.isArray(payload.checks) ? payload.checks : [];
+  const onlineNodes = rows.filter(row => row && row.online === true).length;
   if (!ip || !isPublicIp(ip)) throw new Error("Only public IPv4/IPv6 addresses are accepted.");
-
-  const title = `IP submission: ${ip}`;
-  const body = [
-    `IP: ${ip}`,
-    "",
-    "PingMap browser preview:",
-    `Country: ${payload.country_name || ""}`,
-    `Country code: ${payload.country_code || ""}`,
-    `Region: ${payload.region_name || ""}`,
-    `City: ${payload.city_name || ""}`,
-    `Organization: ${payload.organization || ""}`,
-    `ASN: ${payload.asn || ""}`,
-    `Usage type: ${payload.usage_type || ""}`,
-    `Proxy/VPN: ${Boolean(payload.is_proxy)}`,
-    "",
-    "This issue was created by the PingMap submission gateway. GitHub Actions must re-geolocate and verify the IP with Globalping before publishing it."
-  ].join("\n");
-
-  const issue = await github(env, "/issues", {
-    method: "POST",
-    body: JSON.stringify({ title, body })
-  });
+  if (onlineNodes < 1) throw new Error("At least one Check-Host ICMP node must respond.");
 
   return {
-    submission_id: issue.number,
-    status: "verifying",
-    status_url: `/api/submission/${issue.number}`,
-    issue_url: issue.html_url
+    ip,
+    ip_version: isIPv6(ip) ? 6 : 4,
+    country_code: clean(payload.country_code, 8).toUpperCase(),
+    country_name: clean(payload.country_name),
+    region_name: clean(payload.region_name),
+    city_name: clean(payload.city_name),
+    organization: clean(payload.organization),
+    isp: clean(payload.isp || payload.organization),
+    usage_type: clean(payload.usage_type) || "Not detected",
+    is_proxy: Boolean(payload.is_proxy),
+    is_reachable: true,
+    ping_nodes: onlineNodes,
+    ping_total_nodes: rows.length,
+    ping_results: rows.slice(0, 100),
+    ping_checked_at: new Date().toISOString(),
+    submitted_at: new Date().toISOString(),
+    source: "community-check-host"
   };
 }
 
-async function submissionStatus(env, issueNumber) {
-  const issue = await github(env, `/issues/${encodeURIComponent(issueNumber)}`);
-  const comments = await github(env, `/issues/${encodeURIComponent(issueNumber)}/comments?per_page=100`);
-  const latest = [...comments].reverse().find(c => typeof c.body === "string" && (c.body.includes("**IP added to PingMap.") || c.body.includes("**Submission rejected:")));
-
-  if (!latest) {
-    return { status: issue.state === "closed" ? "failed" : "verifying", submission_id: Number(issueNumber), message: issue.state === "closed" ? "Submission ended without a processing result." : "Verifying IP with Globalping…" };
+export class PingMapDirectory {
+  constructor(state) {
+    this.state = state;
   }
 
-  if (latest.body.includes("**IP added to PingMap.")) {
-    return { status: "added", submission_id: Number(issueNumber), message: "IP verified and added to PingMap.", details: latest.body };
-  }
+  async fetch(request) {
+    const url = new URL(request.url);
 
-  const rejected = latest.body.match(/\*\*Submission rejected:\s*([^*]+)\*\*/i);
-  return { status: "rejected", submission_id: Number(issueNumber), message: rejected?.[1]?.trim() || "Submission rejected.", details: latest.body };
+    if (request.method === "GET" && url.pathname === "/entries") {
+      return Response.json(await readAll(this), { headers: cors(new Headers()) });
+    }
+
+    if (request.method !== "POST" || url.pathname !== "/entries") {
+      return Response.json({ error: "Not found" }, { status: 404, headers: cors(new Headers()) });
+    }
+
+    const payload = await request.json();
+    const entry = normalizeEntry(payload);
+    const entries = await readAll(this);
+    const existing = entries.findIndex(item => String(item.ip).toLowerCase() === entry.ip);
+
+    if (existing >= 0) {
+      entries[existing] = entry;
+    } else {
+      entries.unshift(entry);
+    }
+
+    await writeAll(this, entries);
+    return Response.json({ status: "added", entry }, { headers: cors(new Headers()) });
+  }
 }
 
 export default {
@@ -123,18 +115,37 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(new Headers()) });
 
     const url = new URL(request.url);
+
     try {
+      if (!env.PINGMAP_DIRECTORY) throw new Error("PINGMAP_DIRECTORY binding is not configured.");
+
+      const id = env.PINGMAP_DIRECTORY.idFromName("global");
+      const stub = env.PINGMAP_DIRECTORY.get(id);
+
+      if (request.method === "GET" && url.pathname === "/api/health") {
+        return response({ ok: true, service: "pingmap-direct-directory" });
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/entries") {
+        return new Response(await (await stub.fetch("https://directory/entries")).text(), {
+          status: 200,
+          headers: cors(new Headers(JSON_HEADERS))
+        });
+      }
+
       if (request.method === "POST" && url.pathname === "/api/submit") {
         const payload = await request.json();
-        return response(await createSubmission(env, payload));
+        const result = await stub.fetch("https://directory/entries", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        return new Response(await result.text(), {
+          status: result.status,
+          headers: cors(new Headers(JSON_HEADERS))
+        });
       }
 
-      const match = url.pathname.match(/^\/api\/submission\/(\d+)$/);
-      if (request.method === "GET" && match) {
-        return response(await submissionStatus(env, match[1]));
-      }
-
-      if (url.pathname === "/api/health") return response({ ok: true, service: "pingmap-submission-gateway" });
       return response({ error: "Not found" }, 404);
     } catch (error) {
       return response({ error: error?.message || "Internal server error" }, 400);
